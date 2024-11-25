@@ -78,6 +78,17 @@ namespace Server
         //        deviceWatcher = null;
         //    }
         //}
+        
+        public static int Command_Handler(string command)
+        {
+            if (command == "stop")
+                return -1;
+            else if(command == "connect")
+            {
+                Console.WriteLine("Connecting to device...");
+            }
+            return 0;
+        }
         public static void ExecuteServer()
         {
             // Establish the local endpoint 
@@ -108,7 +119,7 @@ namespace Server
                 // the Client list that will want
                 // to connect to Server
                 listener.Listen(10);
-
+                int ret;
                 while (true)
                 {
 
@@ -136,13 +147,13 @@ namespace Server
                             if (data.IndexOf("<EOM>") > -1)
                                 break;
                         }
-
+                        data = data.Split("<")[0];
                         Console.WriteLine("Text received -> {0} ", data);
                         byte[] message = Encoding.ASCII.GetBytes(data);
-
-                        // Send a message to Client 
-                        // using Send() method
                         clientSocket.Send(message);
+                        ret = Command_Handler(data);
+                        if (ret==-1)
+                                break;
                         data = "";
 
                     }
@@ -152,6 +163,8 @@ namespace Server
                     // for a new Client Connection
                     clientSocket.Shutdown(SocketShutdown.Both);
                     clientSocket.Close();
+                    if (ret == -1)
+                        break;
                 }
             }
 

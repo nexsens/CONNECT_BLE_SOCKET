@@ -3,89 +3,61 @@ using System.Collections.ObjectModel;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-//using Windows.Devices.Bluetooth;
-//using Windows.Devices.Enumeration;
-    //< PackageReference Include = "Microsoft.Windows.SDK.Contracts" Version = "10.0.26100.1742" />
+using InTheHand.Bluetooth;
+
 
 namespace Server
 {
-
     class Program
-    {
-        //static DeviceWatcher deviceWatcher;
-        // Main Method
+    {       
         static void Main(string[] args)
         {
             ExecuteServer();
-            //ScanBLE();
+        }
+
+        public static async Task SearchDevices()
+        {
+            await Task.Run(()=>SearchDevicesAsync());
+        }
+        public static async Task SearchDevicesAsync()
+        {
+            try
+            {
+                var discoveredDevices = await Bluetooth.ScanForDevicesAsync();
+                Console.WriteLine($"found {discoveredDevices?.Count} devices");
+                foreach(var d in discoveredDevices)
+                {
+                    Console.WriteLine("Name:"+d.Name+" | ID"+d.Id);
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("In exception",e.Message);
+            }
+
         }
 
         public static void ScanBLE()
         {
             Console.WriteLine("Scanning nearby bluetooth LE devices...");
-            //StartBleDeviceWatcher();
         }
-        //public static void StartBleDeviceWatcher()
-
-        //{
-        //    // Additional properties we would like about the device.
-        //    // Property strings are documented here https://msdn.microsoft.com/en-us/library/windows/desktop/ff521659(v=vs.85).aspx
-        //    string[] requestedProperties = { "System.Devices.Aep.DeviceAddress", "System.Devices.Aep.IsConnected", "System.Devices.Aep.Bluetooth.Le.IsConnectable" };
-
-        //    // BT_Code: Example showing paired and non-paired in a single query.
-        //    string aqsAllBluetoothLEDevices = "(System.Devices.Aep.ProtocolId:=\"{bb7bb05e-5972-42b5-94fc-76eaa7084d49}\")";
-
-        //    deviceWatcher =
-        //            DeviceInformation.CreateWatcher(
-        //                aqsAllBluetoothLEDevices,
-        //                requestedProperties,
-        //                DeviceInformationKind.AssociationEndpoint);
-
-        //    // Register event handlers before starting the watcher.
-        //    //deviceWatcher.Added += DeviceWatcher_Added;
-        //    //deviceWatcher.Updated += DeviceWatcher_Updated;
-        //    //deviceWatcher.Removed += DeviceWatcher_Removed;
-        //    //deviceWatcher.EnumerationCompleted += DeviceWatcher_EnumerationCompleted;
-        //    //deviceWatcher.Stopped += DeviceWatcher_Stopped;
-
-        //    // Start over with an empty collection.
-        //    //KnownDevices.Clear();
-
-        //    // Start the watcher. Active enumeration is limited to approximately 30 seconds.
-        //    // This limits power usage and reduces interference with other Bluetooth activities.
-        //    // To monitor for the presence of Bluetooth LE devices for an extended period,
-        //    // use the BluetoothLEAdvertisementWatcher runtime class. See the BluetoothAdvertisement
-        //    // sample for an example.
-        //    deviceWatcher.Start();
-        //}
-
-        ///// <summary>
-        ///// Stops watching for all nearby Bluetooth devices.
-        ///// </summary>
-        //private void StopBleDeviceWatcher()
-        //{
-        //    if (deviceWatcher != null)
-        //    {
-        //        // Unregister the event handlers.
-        //        //deviceWatcher.Added -= DeviceWatcher_Added;
-        //        //deviceWatcher.Updated -= DeviceWatcher_Updated;
-        //        //deviceWatcher.Removed -= DeviceWatcher_Removed;
-        //        //deviceWatcher.EnumerationCompleted -= DeviceWatcher_EnumerationCompleted;
-        //        //deviceWatcher.Stopped -= DeviceWatcher_Stopped;
-
-        //        // Stop the watcher.
-        //        deviceWatcher.Stop();
-        //        deviceWatcher = null;
-        //    }
-        //}
         
         public static int Command_Handler(string command)
         {
             if (command == "stop")
                 return -1;
-            else if(command == "connect")
+            
+            else if (command == "connect")
             {
                 Console.WriteLine("Connecting to device...");
+            }
+            else if (command == "scan")
+            {
+                Console.WriteLine("Scanning..");
+
+                SearchDevices();
+
+                //Task.Delay(10000);
             }
             return 0;
         }

@@ -10,25 +10,58 @@ namespace Server
 {
     class Program
     {       
+        static IReadOnlyCollection<BluetoothDevice> _devices;
         static void Main(string[] args)
         {
             ExecuteServer();
         }
 
-        public static async Task SearchDevices()
+        public static  async Task ConnectDevice(int index)
         {
-            await Task.Run(()=>SearchDevicesAsync());
+            await Task.Run(() => ConnectDeviceAsync(index));
         }
-        public static async Task SearchDevicesAsync()
+        public static async Task ConnectDeviceAsync(int index)
         {
             try
             {
-                var discoveredDevices = await Bluetooth.ScanForDevicesAsync();
-                Console.WriteLine($"found {discoveredDevices?.Count} devices");
-                foreach(var d in discoveredDevices)
+                Console.WriteLine("Connecting to "+_devices.ElementAt(index).Name);
+            }
+            catch(Exception e)
+            {
+                Console.WriteLine(e.StackTrace);
+            }
+        }
+        public static async Task SearchDevices(Socket client)
+        {
+            await Task.Run(()=>SearchDevicesAsync(client));
+        }
+        public static async Task SearchDevicesAsync(Socket client)
+        {
+            try
+            {
+                _devices = await Bluetooth.ScanForDevicesAsync();
+                Console.WriteLine($"found {_devices?.Count} devices");
+                int i = 0;
+                string send_str = "";
+                foreach (var d in _devices)
                 {
-                    Console.WriteLine("Name:"+d.Name+" | ID"+d.Id);
+                    Console.WriteLine(i +" | Name:"+d.Name+" | ID"+d.Id + " | IsPaired"+d.IsPaired);
+                    send_str = send_str + ";" + i + "," + d.Name;
+                    i++;
                 }
+                
+                client.Send(Encoding.ASCII.GetBytes(send_str));
+
+                //BluetoothDevice rtuDevice = _devices.Single(d => d.Name == "X3RTU");
+                //var gatt = rtuDevice.Gatt;
+                //await gatt.ConnectAsync();
+                //BluetoothUuid nameService = new BluetoothUuid("2A29");
+
+
+                //GattService rtuService = await gatt.GetPrimaryServiceAsync();
+
+                //GattCharacteristic fooChar = await rtuService.GetCharacteristicAsync(Guid.Parse(BleUuids.FOO_CHAR));
+
             }
             catch (Exception e)
             {
@@ -42,21 +75,23 @@ namespace Server
             Console.WriteLine("Scanning nearby bluetooth LE devices...");
         }
         
-        public static int Command_Handler(string command)
+        public static int Command_Handler(string command, Socket client)
         {
             if (command == "stop")
                 return -1;
             
-            else if (command == "connect")
+            else if (command.Contains("connect"))
             {
-                Console.WriteLine("Connecting to device...");
+                Console.WriteLine("Command is "+command);
+                string v = command.Split(" ")[1];
+                int index = Int32.Parse(v);
+                Console.WriteLine("Connecting to device "+_devices.ElementAt(index).Name);
             }
             else if (command == "scan")
             {
                 Console.WriteLine("Scanning..");
 
-                SearchDevices();
-
+                SearchDevices(client);
                 //Task.Delay(10000);
             }
             return 0;
@@ -102,7 +137,7 @@ namespace Server
                     // Accept() method the server 
                     // will accept connection of client
                     Socket clientSocket = listener.Accept();
-                    Console.WriteLine("Connected!");
+                    Console.WriteLine("Connected over socket!");
 
                     // Data buffer
                     byte[] bytes = new Byte[1024];
@@ -120,10 +155,10 @@ namespace Server
                                 break;
                         }
                         data = data.Split("<")[0];
-                        Console.WriteLine("Text received -> {0} ", data);
-                        byte[] message = Encoding.ASCII.GetBytes(data);
+                        Console.WriteLine("Command received -> {0} ", data);
+                        byte[] message = Encoding.ASCII.GetBytes(data+"_ack");
                         clientSocket.Send(message);
-                        ret = Command_Handler(data);
+                        ret = Command_Handler(data,clientSocket);
                         if (ret==-1)
                                 break;
                         data = "";

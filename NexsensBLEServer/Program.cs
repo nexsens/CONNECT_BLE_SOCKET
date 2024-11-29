@@ -4,15 +4,25 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using InTheHand.Bluetooth;
+using Microsoft.Extensions.Logging;
+
+//using Microsoft.Extensions.Logging;
 
 
 namespace Server
 {
+
     class Program
-    {       
+    {
+ 
         static IReadOnlyCollection<BluetoothDevice> _devices;
-        static void Main(string[] args)
+        static ILogger logger;
+    static void Main(string[] args)
         {
+            using ILoggerFactory factory = LoggerFactory.Create(builder => builder.AddConsole());
+            logger = factory.CreateLogger("NexSens");
+            //LogStartupMessage(logger, "fun");
+            logger.LogInformation("Welcome to NexSens BLE Socket Server");
             ExecuteServer();
         }
 
@@ -24,7 +34,7 @@ namespace Server
         {
             try
             {
-                Console.WriteLine("Connecting to "+_devices.ElementAt(index).Name);
+                logger.LogInformation("Connecting to "+_devices.ElementAt(index).Name);
                 //BluetoothDevice rtuDevice = _devices.Single(d => d.Name == "X3RTU");
                 var gatt = _devices.ElementAt(index).Gatt;
                 await gatt.ConnectAsync();
@@ -32,7 +42,7 @@ namespace Server
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.StackTrace);
+                logger.LogInformation(e.StackTrace);
             }
         }
         public static async Task SearchDevices(Socket client)
@@ -44,12 +54,12 @@ namespace Server
             try
             {
                 _devices = await Bluetooth.ScanForDevicesAsync();
-                Console.WriteLine($"found {_devices?.Count} devices");
+                logger.LogInformation($"found {_devices?.Count} devices");
                 int i = 0;
                 string send_str = "";
                 foreach (var d in _devices)
                 {
-                    Console.WriteLine(i +" | Name:"+d.Name+" | ID"+d.Id + " | IsPaired"+d.IsPaired);
+                    logger.LogInformation(i +" | Name:"+d.Name+" | ID"+d.Id + " | IsPaired"+d.IsPaired);
                     send_str = send_str + ";" + i + "," + d.Name;
                     i++;
                 }
@@ -69,14 +79,14 @@ namespace Server
             }
             catch (Exception e)
             {
-                Console.WriteLine("In exception",e.Message);
+                logger.LogInformation("In exception",e.Message);
             }
 
         }
 
         public static void ScanBLE()
         {
-            Console.WriteLine("Scanning nearby bluetooth LE devices...");
+            logger.LogInformation("Scanning nearby bluetooth LE devices...");
         }
         
         public static int Command_Handler(string command, Socket client)
@@ -86,14 +96,14 @@ namespace Server
             
             else if (command.Contains("connect"))
             {
-                Console.WriteLine("Command is "+command);
+                logger.LogInformation("Command is "+command);
                 string v = command.Split(" ")[1];
                 int index = Int32.Parse(v);
-                Console.WriteLine("Connecting to device "+_devices.ElementAt(index).Name);
+                logger.LogInformation("Connecting to device "+_devices.ElementAt(index).Name);
             }
             else if (command == "scan")
             {
-                Console.WriteLine("Scanning..");
+                logger.LogInformation("Scanning..");
 
                 SearchDevices(client);
                 //Task.Delay(10000);
@@ -135,14 +145,14 @@ namespace Server
                 while (true)
                 {
 
-                    Console.WriteLine("Waiting connection on "+ipAddr.ToString());
+                    logger.LogInformation("Waiting connection on "+ipAddr.ToString());
 
                     // Suspend while waiting for
                     // incoming connection Using 
                     // Accept() method the server 
                     // will accept connection of client
                     Socket clientSocket = listener.Accept();
-                    Console.WriteLine("Connected over socket!");
+                    logger.LogInformation("Connected over socket!");
 
                     // Data buffer
                     byte[] bytes = new Byte[1024];
@@ -160,7 +170,7 @@ namespace Server
                                 break;
                         }
                         data = data.Split("<")[0];
-                        Console.WriteLine("Command received -> {0} ", data);
+                        logger.LogInformation("Command received -> {0} ", data);
                         byte[] message = Encoding.ASCII.GetBytes(data+"_ack");
                         clientSocket.Send(message);
                         ret = Command_Handler(data,clientSocket);
@@ -182,7 +192,7 @@ namespace Server
 
             catch (Exception e)
             {
-                Console.WriteLine(e.ToString());
+                logger.LogInformation(e.ToString());
             }
         }
     }

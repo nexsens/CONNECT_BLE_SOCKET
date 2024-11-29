@@ -25,8 +25,12 @@ namespace Server
             try
             {
                 Console.WriteLine("Connecting to "+_devices.ElementAt(index).Name);
+                //BluetoothDevice rtuDevice = _devices.Single(d => d.Name == "X3RTU");
+                var gatt = _devices.ElementAt(index).Gatt;
+                await gatt.ConnectAsync();
+
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 Console.WriteLine(e.StackTrace);
             }
@@ -102,7 +106,8 @@ namespace Server
             // for the socket. Dns.GetHostName
             // returns the name of the host 
             // running the application.
-            IPHostEntry ipHost = Dns.GetHostEntry(Dns.GetHostName());
+
+            IPHostEntry ipHost = Dns.GetHostEntry("localhost");
             IPAddress ipAddr = ipHost.AddressList[1];
             //IPAddress ipAddr = IPAddress.Parse("127.0.0.1");
             IPEndPoint localEndPoint = new IPEndPoint(ipAddr, 31003);

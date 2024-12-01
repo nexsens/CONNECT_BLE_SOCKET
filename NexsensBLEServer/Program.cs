@@ -4,7 +4,10 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using InTheHand.Bluetooth;
+using InTheHand.Net.Bluetooth;
 using Microsoft.Extensions.Logging;
+using Windows.Devices.Enumeration;
+
 
 //using Microsoft.Extensions.Logging;
 
@@ -19,14 +22,23 @@ namespace Server
         static ILogger logger;
     static void Main(string[] args)
         {
-            using ILoggerFactory factory = LoggerFactory.Create(builder => builder.AddConsole());
-            logger = factory.CreateLogger("NexSens");
+            string logFilePath = "console_log.txt";
+
+            using ILoggerFactory factory = LoggerFactory.Create(builder =>
+            {
+                builder.AddConsole();
+                //builder.AddProvider(new CustomFileLoggerProvider(logFileWriter));
+                //https://github.com/dotnet/samples/tree/main/core/logging
+                //https://learn.microsoft.com/en-us/answers/questions/1377949/logging-in-c-to-a-text-file
+            });
+            logger = factory.CreateLogger("Nexsens");
             //LogStartupMessage(logger, "fun");
             logger.LogInformation("Welcome to NexSens BLE Socket Server");
             ExecuteServer();
         }
 
         public static  async Task ConnectDevice(int index)
+
         {
             await Task.Run(() => ConnectDeviceAsync(index));
         }
@@ -38,6 +50,46 @@ namespace Server
                 //BluetoothDevice rtuDevice = _devices.Single(d => d.Name == "X3RTU");
                 var gatt = _devices.ElementAt(index).Gatt;
                 await gatt.ConnectAsync();
+                if (gatt.IsConnected)
+                {
+                    var services = await gatt.GetPrimaryServicesAsync();
+                    foreach (var service in services)
+                    {
+                        var serviceName = GattServiceUuids.GetServiceName(service.Uuid);
+                        if (string.IsNullOrWhiteSpace(serviceName))
+                            serviceName = service.Uuid.ToString();
+                        logger.LogInformation(serviceName);
+                        var characteristics = await service.GetCharacteristicsAsync();
+                        foreach (var characteristic in characteristics)
+                        {
+                            var charName = GattCharacteristicUuids.GetCharacteristicName(characteristic.Uuid);
+                            string value = string.Empty;
+
+                            if (string.IsNullOrWhiteSpace(charName))
+                                charName = characteristic.Uuid.ToString();
+                            logger.LogInformation("Char name is "+charName);
+                            if (characteristic.Uuid.ToString() is "2A24")
+                            {
+                                var rawValue = await characteristic.ReadValueAsync();
+                                if (rawValue != null)
+                                {
+                                    value = System.Text.Encoding.UTF8.GetString(rawValue).Trim();
+                                    logger.LogInformation("Read value is " + value);
+                                }
+                                else
+                                {
+                                    logger.LogInformation("Value read as NULL - check pairing");
+                                    DeviceInformation d = new DeviceInformation(characteristic.Uuid);
+                                    //DevicePairingResult result = await DeviceInfo.Pairing.PairAsync();
+
+                                }
+
+                            }
+
+                        }
+
+                    }
+                }
 
             }
             catch (Exception e)
@@ -99,7 +151,8 @@ namespace Server
                 logger.LogInformation("Command is "+command);
                 string v = command.Split(" ")[1];
                 int index = Int32.Parse(v);
-                logger.LogInformation("Connecting to device "+_devices.ElementAt(index).Name);
+                //logger.LogInformation("Connecting to device "+_devices.ElementAt(index).Name);
+                ConnectDevice(index);
             }
             else if (command == "scan")
             {

@@ -6,7 +6,9 @@ using System.Text;
 using InTheHand.Bluetooth;
 using InTheHand.Net.Bluetooth;
 using Microsoft.Extensions.Logging;
+using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Enumeration;
+using Windows.Media.Streaming.Adaptive;
 
 
 //using Microsoft.Extensions.Logging;
@@ -19,7 +21,14 @@ namespace Server
     {
  
         static IReadOnlyCollection<BluetoothDevice> _devices;
+        static List<GattService> _services;
+        int read_index = -1;
+        int write_index = -1;
         static ILogger logger;
+        static string custom_data = "a3ab6eae-9eb9-40a7-be2a-038312f3313a";
+        static string custom_data_read = "eb7a0696-4866-46fb-8513-ffd5bcf596fd";
+        static string custom_data_write = "21a65022-e96d-4961-869a-82e78b334e59";
+
     static void Main(string[] args)
         {
             string logFilePath = "console_log.txt";
@@ -37,6 +46,107 @@ namespace Server
             ExecuteServer();
         }
 
+        public static async Task WriteCustom(Socket client,string data)
+        {
+            await Task.Run(() => WriteCustomAsync(client,data));
+        }
+        public static async Task WriteCustomAsync(Socket client, string data)
+        {
+            byte[] mbaddr = { 0x01,0x03,0x10,0x00,0x00,0x01,0x80,0xca};
+            byte[] fwver = { 0x01, 0x03, 0x10, 0x09, 0x00, 0x02, 0x10, 0xc9 };
+            byte[] devid = { 0x01,0x03,0x10,0x07,0x00,0x02,0x71,0x0a };
+            try
+            {
+                logger.LogInformation("Attempting to write now...");
+                var read_ser = _services.Find(x => x.Uuid.ToString() == custom_data);
+                if (read_ser != null)
+                {
+                    var characteristics = await read_ser.GetCharacteristicsAsync();
+                    if (characteristics != null)
+                    {
+                        byte[] value;
+                        foreach (var characteristic in characteristics)
+                        {
+                            if (characteristic.Uuid.ToString() == custom_data_write)
+                            {
+                                if (data == "devid") //devid
+                                {
+                                    value = devid;
+                                }
+                                else if (data == "mbaddr")
+                                {
+                                    value = mbaddr;
+                                }
+                                else if (data == "fwver")//firmware version
+                                {
+                                    value = fwver;
+                                }
+                                else
+                                {
+                                    logger.LogInformation("No valid input given to write");
+                                    return;
+                                }
+                                logger.LogInformation("writing value " + BitConverter.ToString(value));
+                                await characteristic.WriteValueWithoutResponseAsync(value);
+                            }
+
+                        }
+
+                    }
+                }
+                else
+                {
+                    logger.LogInformation("Did not find service with custom_read_data UUID");
+                }
+
+            }
+            catch (Exception ex)
+            {
+                logger.LogInformation(ex.StackTrace);
+            }
+        }
+        public static async Task ReadCustom(Socket client)
+        {
+            await Task.Run(() => ReadCustomAsync(client));
+        }
+        public static async Task ReadCustomAsync(Socket client)
+        {
+            try
+            {
+                logger.LogInformation("Attempting to read now...");
+                var read_ser = _services.Find(x => x.Uuid.ToString() == custom_data);
+                if (read_ser != null)
+                {
+                    var characteristics = await read_ser.GetCharacteristicsAsync();
+                    if (characteristics != null)
+                    {
+                        string value = string.Empty;
+                        
+                            foreach (var characteristic in characteristics)
+                        {
+                            if(characteristic.Uuid.ToString() == custom_data_read)
+                            {
+                                var rawValue = await characteristic.ReadValueAsync();                             
+                                string stringByte = BitConverter.ToString(rawValue);
+                                logger.LogInformation("Read value on custom_data_read characteristic is "+stringByte);
+                                client.Send(Encoding.ASCII.GetBytes(stringByte));
+                            }
+
+                        }
+
+                    }
+                }
+                else
+                {
+                    logger.LogInformation("Did not find service with custom_read_data UUID");
+                }
+               
+            }
+            catch (Exception ex)
+            {
+                logger.LogInformation(ex.StackTrace);
+            }
+        }
         public static  async Task ConnectDevice(int index)
 
         {
@@ -52,13 +162,13 @@ namespace Server
                 await gatt.ConnectAsync();
                 if (gatt.IsConnected)
                 {
-                    var services = await gatt.GetPrimaryServicesAsync();
-                    foreach (var service in services)
+                    _services = await gatt.GetPrimaryServicesAsync();
+                    foreach (var service in _services)
                     {
                         var serviceName = GattServiceUuids.GetServiceName(service.Uuid);
                         if (string.IsNullOrWhiteSpace(serviceName))
                             serviceName = service.Uuid.ToString();
-                        logger.LogInformation(serviceName);
+                        logger.LogInformation("Service is "+serviceName);
                         var characteristics = await service.GetCharacteristicsAsync();
                         foreach (var characteristic in characteristics)
                         {
@@ -67,9 +177,11 @@ namespace Server
 
                             if (string.IsNullOrWhiteSpace(charName))
                                 charName = characteristic.Uuid.ToString();
+
                             logger.LogInformation("Char name is "+charName);
-                            if (characteristic.Uuid.ToString() is "2A24")
+                            if (characteristic.Uuid.ToString() is not null)
                             {
+                                
                                 var rawValue = await characteristic.ReadValueAsync();
                                 if (rawValue != null)
                                 {
@@ -79,7 +191,7 @@ namespace Server
                                 else
                                 {
                                     logger.LogInformation("Value read as NULL - check pairing");
-                                    DeviceInformation d = new DeviceInformation(characteristic.Uuid);
+                                    //DeviceInformation d = new DeviceInformation(characteristic.Uuid);
                                     //DevicePairingResult result = await DeviceInfo.Pairing.PairAsync();
 
                                 }
@@ -160,6 +272,16 @@ namespace Server
 
                 SearchDevices(client);
                 //Task.Delay(10000);
+            }
+            else if(command == "read")
+            {
+                ReadCustom(client);
+            }
+            else if (command.Contains("write"))
+            {
+                string v = command.Split(" ")[1];
+                logger.LogInformation(v);
+                WriteCustom(client, v);
             }
             return 0;
         }

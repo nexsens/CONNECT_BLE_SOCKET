@@ -154,6 +154,17 @@ namespace Server
         {
             await Task.Run(() => ConnectDeviceAsync(index));
         }
+        private static void handlerPairingReq(DeviceInformationCustomPairing CP, DevicePairingRequestedEventArgs DPR)
+        {
+            //so we get here for custom pairing request.
+            //this is the magic place where your pin goes.
+            //my device actually does not require a pin but
+            //windows requires at least a "0".  So this solved 
+            //it.  This does not pull up the Windows UI either.
+            logger.LogInformation("Handling pairing req");
+            DPR.Accept("999888");
+        }
+
         public static async Task ConnectDeviceAsync(int index)
         {
             DeviceInformationCollection deviceInfoCollection;
@@ -198,7 +209,10 @@ namespace Server
                     logger.LogInformation("Connected to gatt server");
                     if(rtudevice != null)
                     {
-                        DevicePairingResult dpr = await rtudevice.Pairing.PairAsync(DevicePairingProtectionLevel.EncryptionAndAuthentication);
+                        rtudevice.Pairing.Custom.PairingRequested += handlerPairingReq;
+
+                        DevicePairingResult dpr = await rtudevice.Pairing.Custom.PairAsync(DevicePairingKinds.ProvidePin, DevicePairingProtectionLevel.EncryptionAndAuthentication);
+                        //.PairAsync(DevicePairingProtectionLevel.EncryptionAndAuthentication);
                         logger.LogInformation("Pairing status " + dpr.Status.ToString());
 
                     }
@@ -232,7 +246,7 @@ namespace Server
                                 }
                                 else
                                 {
-                                    logger.LogInformation("Value read as NULL - check pairing");
+                                    logger.LogInformation("Value read as NULL!!");
                                     //DeviceInformation d = new DeviceInformation(characteristic.Uuid);
                                     //DevicePairingResult result = await DeviceInfo.Pairing.PairAsync();
 

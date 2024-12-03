@@ -4,7 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using InTheHand.Bluetooth;
-using InTheHand.Net.Bluetooth;
+//using InTheHand.Net.Bluetooth;
 using Microsoft.Extensions.Logging;
 using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Enumeration;
@@ -19,7 +19,9 @@ namespace Server
 
     class Program
     {
- 
+        static DeviceInformationKind deviceInformationKind;
+        static DeviceInformation rtudevice;
+
         static IReadOnlyCollection<BluetoothDevice> _devices;
         static List<GattService> _services;
         int read_index = -1;
@@ -154,14 +156,54 @@ namespace Server
         }
         public static async Task ConnectDeviceAsync(int index)
         {
+            DeviceInformationCollection deviceInfoCollection;
+
             try
             {
                 logger.LogInformation("Connecting to "+_devices.ElementAt(index).Name);
                 //BluetoothDevice rtuDevice = _devices.Single(d => d.Name == "X3RTU");
+                
                 var gatt = _devices.ElementAt(index).Gatt;
+
+                deviceInfoCollection = await DeviceInformation.FindAllAsync(Windows.Devices.Bluetooth.BluetoothLEDevice.GetDeviceSelectorFromPairingState(false));
+                if (deviceInfoCollection.Count > 0)
+                {
+                    // When you want to "save" a DeviceInformation to get it back again later,
+                    // use both the DeviceInformation.Kind and the DeviceInformation.Id.
+                    //interfaceIdTextBox.Text = deviceInfoCollection[0].Id;
+                    //deviceInformationKind = deviceInfoCollection[0].Kind;
+                    //InformationKindTextBox.Text = deviceInformationKind.ToString();
+                    //getButton.IsEnabled = true;
+                    foreach (var d in deviceInfoCollection)
+                    {
+                        logger.LogInformation(d.Name + " || " + d.Id + " || " + d.Kind.ToString());
+                        if (d.Name.Contains("RTU"))
+                        {
+                            logger.LogInformation("Found RTU device");
+                            //DevicePairingResult dpr = await d.Pairing.PairAsync();
+                            //logger.LogInformation("Pairing status " + dpr.Status.ToString());
+                            rtudevice = d;
+                        }
+                    }
+
+                }
+                else
+                {
+                    logger.LogInformation("No devices in collection");
+                }
+
                 await gatt.ConnectAsync();
                 if (gatt.IsConnected)
                 {
+                    logger.LogInformation("Connected to gatt server");
+                    if(rtudevice != null)
+                    {
+                        DevicePairingResult dpr = await rtudevice.Pairing.PairAsync(DevicePairingProtectionLevel.EncryptionAndAuthentication);
+                        logger.LogInformation("Pairing status " + dpr.Status.ToString());
+
+                    }
+
+
                     _services = await gatt.GetPrimaryServicesAsync();
                     foreach (var service in _services)
                     {
@@ -217,6 +259,10 @@ namespace Server
         {
             try
             {
+
+
+                
+                //return;
                 _devices = await Bluetooth.ScanForDevicesAsync();
                 logger.LogInformation($"found {_devices?.Count} devices");
                 int i = 0;

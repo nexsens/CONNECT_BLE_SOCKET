@@ -27,7 +27,6 @@ namespace Server
             SCANNING_FAILED,
             CONNECTING,
             CONNECT_FAILED,
-            CONNECT_SUCCESS,
             CONNECTED
         };
         static STATUS_FLAGS current_status;
@@ -229,6 +228,7 @@ namespace Server
                 if (gatt.IsConnected)
                 {
                     connected_index = index;
+                    current_status = STATUS_FLAGS.CONNECTED;
                     logger.LogInformation("Connected to gatt server");
                     if(rtudevice != null)
                     {
@@ -280,6 +280,11 @@ namespace Server
                         }
 
                     }
+                }
+                else
+                {
+                    logger.LogInformation("GATT did not connect");
+                    current_status = STATUS_FLAGS.CONNECT_FAILED;
                 }
 
             }

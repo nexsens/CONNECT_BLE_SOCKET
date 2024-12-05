@@ -8,7 +8,6 @@ using InTheHand.Bluetooth;
 using Microsoft.Extensions.Logging;
 using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Enumeration;
-using Windows.Media.Streaming.Adaptive;
 
 
 //using Microsoft.Extensions.Logging;
@@ -23,6 +22,7 @@ namespace Server
         static DeviceInformation rtudevice;
 
         static IReadOnlyCollection<BluetoothDevice> _devices;
+        static int connected_index;
         static List<GattService> _services;
         int read_index = -1;
         int write_index = -1;
@@ -48,6 +48,15 @@ namespace Server
             ExecuteServer();
         }
 
+        public static async Task Disconnect(Socket client)
+        {
+            await Task.Run(() => DisconnectAsync(client));
+        }
+        public static async Task DisconnectAsync(Socket client)
+        {
+            logger.LogInformation("Disconnecting " + _devices.ElementAt(connected_index).Name);
+            _devices.ElementAt(connected_index).Gatt.Disconnect();
+        }
         public static async Task WriteCustom(Socket client,string data)
         {
             await Task.Run(() => WriteCustomAsync(client,data));
@@ -206,6 +215,7 @@ namespace Server
                 await gatt.ConnectAsync();
                 if (gatt.IsConnected)
                 {
+                    connected_index = index;
                     logger.LogInformation("Connected to gatt server");
                     if(rtudevice != null)
                     {
@@ -272,10 +282,7 @@ namespace Server
         public static async Task SearchDevicesAsync(Socket client)
         {
             try
-            {
-
-
-                
+            {                
                 //return;
                 _devices = await Bluetooth.ScanForDevicesAsync();
                 logger.LogInformation($"found {_devices?.Count} devices");
@@ -283,8 +290,10 @@ namespace Server
                 string send_str = "";
                 foreach (var d in _devices)
                 {
-                    logger.LogInformation(i +" | Name:"+d.Name+" | ID"+d.Id + " | IsPaired"+d.IsPaired);
-                    send_str = send_str + ";" + i + "," + d.Name;
+                    var rssi = await d.Gatt.ReadRssi();
+                    logger.LogInformation(i +" | Name :"+d.Name+" | ID :"+d.Id + " | IsPaired : "+d.IsPaired+ " | RSSI : "+rssi);
+                    // todo send 0/1 instead of true/false for isPaired
+                    send_str = send_str + i + "," + d.Name + "," + d.IsPaired + "," + rssi.ToString() + ";";
                     i++;
                 }
                 
@@ -342,6 +351,13 @@ namespace Server
                 string v = command.Split(" ")[1];
                 logger.LogInformation(v);
                 WriteCustom(client, v);
+            }
+            else if(command == "disconnect")
+            {
+                // check status here
+                logger.LogInformation("Disconnecting device ..");
+                Disconnect(client);
+
             }
             return 0;
         }

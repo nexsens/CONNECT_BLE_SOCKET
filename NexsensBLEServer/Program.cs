@@ -8,6 +8,7 @@ using InTheHand.Bluetooth;
 using Microsoft.Extensions.Logging;
 using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Enumeration;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 
 //using Microsoft.Extensions.Logging;
@@ -18,6 +19,18 @@ namespace Server
 
     class Program
     {
+        enum STATUS_FLAGS
+        {
+            IDLE,
+            SCANNING,
+            SCANNING_DONE,
+            SCANNING_FAILED,
+            CONNECTING,
+            CONNECT_FAILED,
+            CONNECT_SUCCESS,
+            CONNECTED
+        };
+        static STATUS_FLAGS current_status;
         static DeviceInformationKind deviceInformationKind;
         static DeviceInformation rtudevice;
 
@@ -282,7 +295,7 @@ namespace Server
         public static async Task SearchDevicesAsync(Socket client)
         {
             try
-            {                
+            {
                 //return;
                 _devices = await Bluetooth.ScanForDevicesAsync();
                 logger.LogInformation($"found {_devices?.Count} devices");
@@ -293,11 +306,12 @@ namespace Server
                     var rssi = await d.Gatt.ReadRssi();
                     logger.LogInformation(i +" | Name :"+d.Name+" | ID :"+d.Id + " | IsPaired : "+d.IsPaired+ " | RSSI : "+rssi);
                     // todo send 0/1 instead of true/false for isPaired
-                    send_str = send_str + i + "," + d.Name + "," + d.IsPaired + "," + rssi.ToString() + ";";
+                    send_str = send_str + i + "," + d.Name + "," + (d.IsPaired?1:0).ToString() + "," + rssi.ToString() + ";";
                     i++;
                 }
                 
                 client.Send(Encoding.ASCII.GetBytes(send_str));
+                current_status = STATUS_FLAGS.SCANNING_DONE;
 
                 //BluetoothDevice rtuDevice = _devices.Single(d => d.Name == "X3RTU");
                 //var gatt = rtuDevice.Gatt;
@@ -312,6 +326,7 @@ namespace Server
             }
             catch (Exception e)
             {
+                current_status = STATUS_FLAGS.SCANNING_FAILED;
                 logger.LogInformation("In exception",e.Message);
             }
 
@@ -329,6 +344,7 @@ namespace Server
             
             else if (command.Contains("connect"))
             {
+                current_status = STATUS_FLAGS.CONNECTING;
                 logger.LogInformation("Command is "+command);
                 string v = command.Split(" ")[1];
                 int index = Int32.Parse(v);
@@ -337,6 +353,7 @@ namespace Server
             }
             else if (command == "scan")
             {
+                current_status = STATUS_FLAGS.SCANNING;
                 logger.LogInformation("Scanning..");
 
                 SearchDevices(client);
@@ -357,7 +374,12 @@ namespace Server
                 // check status here
                 logger.LogInformation("Disconnecting device ..");
                 Disconnect(client);
-
+                current_status=STATUS_FLAGS.IDLE;
+            }
+            else if(command == "status")
+            {
+                byte[] message = Encoding.ASCII.GetBytes(current_status.ToString());
+                client.Send(message);
             }
             return 0;
         }
